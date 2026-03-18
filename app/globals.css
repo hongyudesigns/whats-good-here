@@ -1,26 +1,271 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Blue gradient color system (v3) */
+  --blue-1: #0569ff; /* darkest, bottom */
+  --blue-2: #2b80ff;
+  --blue-3: #5b9dff;
+  --blue-4: #8dbaff; /* lightest, top */
+
+  /* Base background color */
+  --color-bg: #5b9dff;
+
+  /* Receipt and UI colors */
+  --receipt-bg: #ffffff;
+  --receipt-text: #1a1a1a;
+  --receipt-secondary: #6b6b6b;
+  --receipt-divider: #e8e8e8;
+
+  --search-bg: rgba(255, 255, 255, 0.25);
+  --search-border: rgba(255, 255, 255, 0.4);
+  --search-text: #ffffff;
+  --search-placeholder: rgba(255, 255, 255, 0.7);
+  --pill-bg: rgba(255, 255, 255, 0.2);
+  --pill-border: rgba(255, 255, 255, 0.4);
+  --pill-text: #ffffff;
+
+  /* Text colors on blue gradient */
+  --color-text: #ffffff;
+  --color-secondary: rgba(255, 255, 255, 0.8);
+
+  /* Backwards-compatible tokens used by Tailwind's default theme mapping */
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  /* Tailwind's sans should map to DM Sans UI font */
+  --font-sans: var(--font-ui);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  /* Default UI font: DM Sans */
+  font-family: var(--font-ui), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+/* Full-viewport gradient blob layer sits behind the app shell. */
+.gradient-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gradient-blob {
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: 0.5;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Base blue blobs */
+.gradient-blob--blue-1 {
+  background: var(--blue-4);
+  top: 8%;
+  left: 5%;
+}
+
+.gradient-blob--blue-2 {
+  background: var(--blue-3);
+  top: 35%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.gradient-blob--blue-3 {
+  background: var(--blue-2);
+  bottom: -10%;
+  right: -5%;
+}
+
+/* White peak — always visible, like light shining through at the top center. */
+.gradient-blob--white-peak {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.6);
+  top: -18%;
+  left: 50%;
+  transform: translateX(-50%);
+  filter: blur(80px);
+  opacity: 1;
+}
+
+/* Loading: subtle drift and opacity breathing on blue blobs only. */
+@keyframes blobDriftSlow {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate3d(20%, -15%, 0);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(-15%, 10%, 0);
+    opacity: 0.3;
+  }
+}
+
+@keyframes blobDriftMedium {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate3d(-20%, 15%, 0);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(15%, -12%, 0);
+    opacity: 0.25;
+  }
+}
+
+@keyframes blobDriftFast {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translate3d(25%, 12%, 0);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(-20%, -10%, 0);
+    opacity: 0.3;
+  }
+}
+
+.gradient-layer--loading .gradient-blob--blue-1 {
+  animation: blobDriftSlow 4s ease-in-out infinite alternate;
+}
+
+.gradient-layer--loading .gradient-blob--blue-2 {
+  animation: blobDriftMedium 3s ease-in-out infinite alternate;
+}
+
+.gradient-layer--loading .gradient-blob--blue-3 {
+  animation: blobDriftFast 2s ease-in-out infinite alternate;
+}
+
+/* Previous search pill entrance: dot → springy pill, then label fade-in */
+@keyframes pillEnterScale {
+  0% {
+    transform: scaleX(0.1);
+  }
+  60% {
+    transform: scaleX(1.1);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pillEnterLabel {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.pill-enter {
+  transform-origin: left center;
+  animation: pillEnterScale 380ms cubic-bezier(0.22, 1.4, 0.32, 1) forwards;
+}
+
+.pill-enter__label {
+  display: inline-block;
+  animation: pillEnterLabel 420ms ease-out forwards;
+}
+
+/* Receipt content font helper — use Poppins for the card */
+.receipt-font {
+  font-family: var(--font-receipt), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+/* Subtle grain / noise overlay tuned for blue gradient */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+      circle at 0 0,
+      rgba(255, 255, 255, 0.08) 0,
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      rgba(0, 0, 0, 0.06) 0,
+      transparent 55%
+    );
+  mix-blend-mode: overlay;
+  opacity: 0.18;
+  z-index: -1;
+}
+
+/* Receipt-style animations */
+@keyframes receiptPrint {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+@keyframes receiptFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Receipt feeds down when results arrive: wrapper height 0 → full; content already at final size. */
+@keyframes receiptGrowDown {
+  from {
+    max-height: 0;
+  }
+  to {
+    max-height: 600px;
+  }
+}
+
+/* Hide scrollbar on horizontal pill row */
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Receipt card container (torn edges are inline SVG in component). No rounding. */
+.receipt-card {
+  position: relative;
+  border-radius: 0;
+  background-color: var(--receipt-bg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  overflow: visible;
 }
