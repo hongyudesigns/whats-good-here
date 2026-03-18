@@ -1,5 +1,17 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+What’s Good Here is a tiny app that summarizes what dishes to order (and what to skip) at a restaurant based on review text. Built with Next.js, Tailwind CSS, and the Anthropic Claude API.
+
+## Status
+
+This is an early MVP prototype built to validate the core concept. Currently live with Philadelphia restaurant data from the Yelp Open Dataset — Philly was chosen because it had the most comprehensive publicly available review data to build on.
+
+The roadmap includes expanding to New York City (my home base) and other major cities using the Google Places API for live, up-to-date restaurant and review data. The Philly version exists to prove the product works before scaling.
+
+## Live Demo
+
+Deployment coming soon. Currently running as a local MVP — reach out if you'd like a walkthrough.
+
 ## Getting Started
 
 First, run the development server:
