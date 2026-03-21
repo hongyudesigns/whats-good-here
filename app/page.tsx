@@ -1,7 +1,8 @@
 "use client";
 
-import { Search } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { PromptInputBox } from "./components/ui/ai-prompt-box";
+import { WordLoader } from "./components/ui/word-loader";
 
 type ApiDish = {
   phrase: string;
@@ -81,37 +82,6 @@ function classNames(...values: Array<string | false | null | undefined>) {
 
 function formatStars(stars: number) {
   return `★ ${stars.toFixed(1)}`;
-}
-
-function useKeyboardOffset() {
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
-
-    const viewport = window.visualViewport;
-
-    const handleResize = () => {
-      const keyboardHeight =
-        window.innerHeight - viewport.height - viewport.offsetTop;
-      if (keyboardHeight > 0) {
-        // Keep the bar 12px above the keyboard.
-        setOffset(keyboardHeight + 12);
-      } else {
-        setOffset(0);
-      }
-    };
-
-    handleResize();
-    viewport.addEventListener("resize", handleResize);
-    viewport.addEventListener("scroll", handleResize);
-    return () => {
-      viewport.removeEventListener("resize", handleResize);
-      viewport.removeEventListener("scroll", handleResize);
-    };
-  }, []);
-
-  return offset;
 }
 
 function DishRow({
@@ -288,6 +258,9 @@ export default function HomePage() {
   const [lastDish, setLastDish] = useState(initialTabState);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>([]);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [multipleMaskMode, setMultipleMaskMode] = useState<
+    "none" | "bottom" | "top" | "both"
+  >("bottom");
 
   useEffect(() => {
     if (hasUserInteracted) return;
@@ -302,7 +275,24 @@ export default function HomePage() {
     };
   }, [hasUserInteracted]);
 
-  async function runSearch(opts?: { businessId?: string; queryOverride?: string }) {
+  useEffect(() => {
+    if (status === "loading") {
+      document.body.classList.add("loading-pulse");
+    } else {
+      document.body.classList.remove("loading-pulse");
+    }
+    return () => {
+      document.body.classList.remove("loading-pulse");
+    };
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== "multiple") {
+      setMultipleMaskMode("bottom");
+    }
+  }, [status]);
+
+  async function runSearch(opts?: { businessId?: string; queryOverride?: string; forceRestaurant?: boolean }) {
     const effectiveQuery = (opts?.queryOverride ?? query).trim();
     if (!opts?.businessId && !effectiveQuery) {
       setError(searchMode === "dish" ? "Please enter a dish name." : "Please enter a restaurant name.");
@@ -316,7 +306,7 @@ export default function HomePage() {
     const params = new URLSearchParams();
     if (opts?.businessId) {
       params.set("business_id", opts.businessId);
-    } else if (searchMode === "dish" || opts?.queryOverride != null) {
+    } else if ((searchMode === "dish" || opts?.queryOverride != null) && !opts?.forceRestaurant) {
       params.set("search", "dish");
       params.set("dish", effectiveQuery);
     } else {
@@ -437,8 +427,7 @@ export default function HomePage() {
     result.business &&
     Array.isArray(result.order_this) &&
     Array.isArray(result.skip_this);
-
-  const keyboardOffset = useKeyboardOffset();
+  const isMultipleState = status === "multiple" && result?.status === "multiple";
 
   function loadFromHistory(entry: SearchHistoryEntry) {
     setResult(entry.result);
@@ -447,84 +436,163 @@ export default function HomePage() {
     setError(null);
   }
 
-  const isLoading = status === "loading";
+  function updateMultipleMaskMode(el: HTMLDivElement) {
+    const { scrollTop, clientHeight, scrollHeight } = el;
+    const hasOverflow = scrollHeight - clientHeight > 1;
+    if (!hasOverflow) {
+      setMultipleMaskMode("none");
+      return;
+    }
+
+    const atTop = scrollTop <= 1;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+    if (atTop && !atBottom) {
+      setMultipleMaskMode("bottom");
+      return;
+    }
+    if (atBottom && !atTop) {
+      setMultipleMaskMode("top");
+      return;
+    }
+    setMultipleMaskMode("both");
+  }
+
+  function handleListScroll(event: React.UIEvent<HTMLDivElement>) {
+    if (status !== "multiple") return;
+    updateMultipleMaskMode(event.currentTarget);
+  }
+
+  useEffect(() => {
+    if (status !== "multiple") return;
+    const node = document.getElementById("multiple-matches-scroll");
+    if (!(node instanceof HTMLDivElement)) return;
+    updateMultipleMaskMode(node);
+  }, [status, result]);
+
+  const multipleMaskStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (status !== "multiple") return undefined;
+
+    const map: Record<"none" | "bottom" | "top" | "both", string | undefined> = {
+      none: undefined,
+      bottom:
+        "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 40px), rgba(0,0,0,0.7) calc(100% - 20px), rgba(0,0,0,0) 100%)",
+      top:
+        "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 20px, rgba(0,0,0,1) 40px, rgba(0,0,0,1) 100%)",
+      both:
+        "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 20px, rgba(0,0,0,1) 40px, rgba(0,0,0,1) calc(100% - 40px), rgba(0,0,0,0.7) calc(100% - 20px), rgba(0,0,0,0) 100%)",
+    };
+    const maskImage = map[multipleMaskMode];
+    if (!maskImage) return undefined;
+    return {
+      WebkitMaskImage: maskImage,
+      maskImage,
+      WebkitMaskSize: "100% 100%",
+      maskSize: "100% 100%",
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+    };
+  }, [status, multipleMaskMode]);
 
   return (
-    <main className="relative min-h-screen pb-28">
-      <div
-        className={classNames(
-          "gradient-layer",
-          isLoading && "gradient-layer--loading",
+    <main
+      className={
+        hasResultCard
+          ? "relative h-[100vh] overflow-y-auto overflow-x-hidden flex flex-col"
+          : "relative h-[100vh] overflow-hidden flex flex-col"
+      }
+      style={
+        hasResultCard
+          ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 65px)" }
+          : undefined
+      }
+    >
+
+      {/* HEADER SECTION */}
+      <div className="flex-shrink-0">
+        {!hasResultCard && (
+          <header
+            className={classNames(
+              "text-center",
+              status === "idle" ? "mb-4" : "mb-8",
+              "pt-8",
+            )}
+          >
+            <h1
+              className="text-[28px] font-medium leading-tight text-[#FFFFFF]"
+            >
+              What&apos;s good here?
+            </h1>
+            {error && (
+              <p className="mt-2 text-[14px] font-normal text-[#FFFFFF]">
+                {error}
+              </p>
+            )}
+            {status === "multiple" &&
+              result &&
+              result.status === "multiple" && (
+                <p className="mt-4 text-center text-[#FFFFFF] text-[13px]">
+                  We found a few places that match. Tap the one you mean:
+                </p>
+              )}
+          </header>
         )}
-      >
-        <div className="gradient-blob gradient-blob--blue-1" />
-        <div className="gradient-blob gradient-blob--blue-2" />
-        <div className="gradient-blob gradient-blob--blue-3" />
-        <div className="gradient-blob--white-peak" />
       </div>
-      {/* Previous search pills — only when we have a receipt and history */}
-      {hasResultCard && searchHistory.length > 0 && (
-        <div
-          className="hide-scrollbar overflow-x-auto overflow-y-hidden pb-2 pr-5"
-          style={{ paddingTop: "calc(16px + env(safe-area-inset-top))" }}
-        >
-          <div className="flex gap-2">
-            {searchHistory.map((entry, index) => (
-              <button
-                key={entry.businessId}
-                type="button"
-                onClick={() => loadFromHistory(entry)}
-                className={classNames(
-                  "shrink-0 rounded-md border border-[var(--pill-border)] bg-[var(--pill-bg)] px-[14px] py-0 text-[13px] font-normal text-[var(--pill-text)] backdrop-blur-sm",
-                  index === 0 && "pill-enter",
-                )}
-                style={{ height: 32 }}
-              >
-                <span className={index === 0 ? "pill-enter__label" : undefined}>
-                  {entry.name}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* TOP REGION: headline + content (results / errors). */}
-      {!hasResultCard && (
-        <header className="pt-[20vh] text-center">
-          <h1 className="text-[28px] font-medium leading-tight text-[color:var(--color-text)]">
-            What&apos;s good here?
-          </h1>
-          {error && (
-            <p className="mt-2 text-[14px] font-normal text-white">
-              {error}
-            </p>
-          )}
-        </header>
-      )}
-
-      <div className="mt-6">
+      {/* CONTENT SECTION */}
+      <div
+        id={status === "multiple" ? "multiple-matches-scroll" : undefined}
+        className={
+          hasResultCard
+            ? "relative z-0 overflow-visible"
+            : status === "multiple" || status === "dish_results"
+              ? "relative z-0 h-[360px] overflow-y-auto overflow-x-hidden"
+            : "relative flex-1 overflow-y-auto overflow-x-hidden z-0"
+        }
+        style={multipleMaskStyle}
+        onScroll={handleListScroll}
+      >
         {status === "idle" && !hasResultCard && (
-          <p className="mx-6 text-left text-[14px] font-normal leading-relaxed text-white/80">
-            Welcome to my personal crusade against reading through reviews to figure out what to eat at a restaurant. Just type the name of a restaurant you&apos;re curious about and we&apos;ll skim the reviews and show you the dishes people can&apos;t stop mentioning in a nifty little list. Hope you enjoy!
+          <p className="text-center text-[14px] font-normal leading-relaxed text-[#FFFFFF]">
+            Harnessing the power of 4-5 star reviews so you never sit at your table and wonder what this place is famous for.
           </p>
         )}
 
-        {status === "loading" && null}
+        {status === "loading" && (
+          <div
+            className="pointer-events-none fixed inset-x-0 z-10 flex justify-center"
+            style={{
+              top: "calc(20vh + 56px)",
+              // WordLoader should sit at midpoint between headline and the pills row.
+              // Pills row is ~80px above the search box, so lift the centering bottom reference by +80px.
+              bottom:
+                "calc(max(10vh, calc(env(safe-area-inset-bottom) + 8px)) + 164px)",
+            }}
+          >
+            <div className="flex items-center">
+              <WordLoader
+                words={[
+                  "skimming reviews",
+                  "finding dishes",
+                  "counting mentions",
+                  "reading opinions",
+                  "almost there",
+                ]}
+                className="text-[#FFFFFF]"
+              />
+            </div>
+          </div>
+        )}
 
         {status === "multiple" &&
         result &&
         result.status === "multiple" && (
-          <section className="mt-6 space-y-3 text-[13px]">
-            <p className="text-[color:var(--color-secondary)]">
-              We found a few places that match. Tap the one you mean:
-            </p>
-            <div className="divide-y divide-[color:var(--color-border)] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+          <section className="my-8 space-y-2 text-[13px]">
+            <div className="space-y-2">
               {result.matches.map((b) => (
                 <button
                   key={b.business_id}
                   type="button"
-                  className="flex w-full items-start justify-between px-3 py-3 text-left hover:bg-[rgba(212,98,42,0.04)]"
+                  className="flex w-full items-start justify-between rounded-md border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] px-[14px] py-[12px] text-left text-[#1A1A1A] hover:bg-[#FFFFFF]/90 transition-colors"
                   onClick={() =>
                     runSearch({
                       businessId: b.business_id,
@@ -532,15 +600,15 @@ export default function HomePage() {
                   }
                 >
                   <div>
-                    <div className="font-semibold text-[color:var(--color-text)]">
+                    <div className="font-semibold text-[#1A1A1A]">
                       {b.name}
                     </div>
-                    <p className="mt-0.5 text-[11px] text-[color:var(--color-secondary)]">
+                    <p className="mt-0.5 text-[11px] text-[#1A1A1A]">
                       {b.address}
                       {b.city ? `, ${b.city}` : null}
                     </p>
                   </div>
-                  <div className="text-right text-[11px] text-[color:var(--color-secondary)]">
+                  <div className="text-right text-[11px] text-[#1A1A1A]">
                     <div>{formatStars(b.stars)}</div>
                     <div className="mt-0.5">
                       {b.review_count.toLocaleString()} reviews
@@ -555,7 +623,7 @@ export default function HomePage() {
         {status === "dish_results" &&
         result &&
         result.status === "dish_results" && (
-          <section className="mt-6 space-y-3 text-[13px]">
+          <section className="mt-0 mb-8 space-y-3 text-[13px]">
             <p className="text-[color:var(--color-secondary)]">
               Restaurants where &quot;{result.dish}&quot; appears in 4–5 star
               reviews:
@@ -565,28 +633,28 @@ export default function HomePage() {
                 No restaurants found with that dish in positive reviews.
               </p>
             ) : (
-              <div className="divide-y divide-[color:var(--color-border)] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+              <div className="space-y-2">
                 {result.results.map((r) => (
                   <button
                     key={r.business_id}
                     type="button"
-                    className="flex w-full items-start justify-between px-3 py-3 text-left hover:bg-[rgba(212,98,42,0.04)]"
+                    className="flex w-full items-start justify-between rounded-md border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] px-[14px] py-[12px] text-left text-[#1A1A1A] hover:bg-[#FFFFFF]/90 transition-colors"
                     onClick={() =>
                       runSearch({ businessId: r.business_id })
                     }
                   >
                     <div>
-                      <div className="font-semibold text-[color:var(--color-text)]">
+                      <div className="font-semibold text-[#1A1A1A]">
                         {r.name}
                       </div>
-                      <p className="mt-0.5 text-[11px] text-[color:var(--color-secondary)]">
+                      <p className="mt-0.5 text-[11px] text-[#1A1A1A]">
                         {r.address}
                         {r.city ? `, ${r.city}` : null}
                       </p>
                     </div>
-                    <div className="text-right text-[11px] text-[color:var(--color-secondary)]">
+                    <div className="text-right text-[11px] text-[#1A1A1A]">
                       <div>{formatStars(r.stars)}</div>
-                      <div className="mt-0.5 font-mono text-[color:var(--color-text)]">
+                      <div className="mt-0.5 font-mono text-[#1A1A1A]">
                         {r.dish_count} mentions
                       </div>
                     </div>
@@ -598,13 +666,16 @@ export default function HomePage() {
         )}
 
         {status === "no_reviews" && selectedBusiness && (
-        <section className="mt-6 rounded-lg border border-[color:var(--color-border)] bg-[rgba(255,255,255,0.9)] p-4 text-[12px]">
-          <p className="font-semibold text-[color:var(--color-text)]">
+        <section className="mt-6 rounded-lg border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] p-4 text-[12px] text-[#1A1A1A]">
+          <p className="font-semibold text-[#1A1A1A]">
             Not enough reviews to make a recommendation.
           </p>
-          <p className="mt-1 text-[color:var(--color-secondary)]">
+          <p className="mt-1 text-[#1A1A1A]">
             We don&apos;t have a strong read on{" "}
-            <span className="font-semibold">{selectedBusiness.name}</span> yet.
+            <span className="font-semibold text-[#1A1A1A]">
+              {selectedBusiness.name}
+            </span>{" "}
+            yet.{" "}
             Try another spot.
           </p>
         </section>
@@ -613,61 +684,121 @@ export default function HomePage() {
         {hasResultCard &&
         result &&
         result.status === "ok" && (
-          <div
-            className="overflow-hidden"
-            style={{
-              animation: "receiptGrowDown 1.2s cubic-bezier(0.32, 0, 0.27, 1) forwards",
-            }}
-          >
-            <ReceiptCard
-              business={result.business}
-              order_this={result.order_this}
-              skip_this={result.skip_this}
-            />
-          </div>
+          <>
+            <div
+              className="overflow-visible mb-8"
+              style={{
+                marginTop: "32px",
+              }}
+            >
+              <ReceiptCard
+                business={result.business}
+                order_this={result.order_this}
+                skip_this={result.skip_this}
+              />
+            </div>
+          </>
         )}
       </div>
 
-      {/* BOTTOM REGION: search bar pinned to bottom (desktop + mobile). */}
-      <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 flex justify-center"
-        style={{
-          transform:
-            keyboardOffset > 0 ? `translateY(-${keyboardOffset}px)` : undefined,
-        }}
-      >
-        <div
-          className="pointer-events-auto w-full max-w-[390px] px-5"
-          style={{
-            paddingBottom: "max(10vh, calc(16px + env(safe-area-inset-bottom)))",
-          }}
-        >
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <div className="relative">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={
-                  hasResultCard ? "Search other restaurant" : "What restaurant are you at?"
-                }
-                className={classNames(
-                  "h-[52px] w-full rounded-full border pl-4 pr-12 text-[14px] outline-none",
-                  "border-[var(--search-border)] bg-[var(--search-bg)] text-[var(--search-text)]",
-                  "placeholder:text-[var(--search-placeholder)]",
-                  "backdrop-blur-[12px]",
-                )}
-              />
-              <button
-                type="submit"
-                className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-transparent text-[var(--search-text)]"
-              >
-                <Search className="h-5 w-5" strokeWidth={2} />
-              </button>
-            </div>
-          </form>
+      {/* DOCK */}
+      {hasResultCard ? (
+        <div className="relative z-20 flex justify-center">
+          <div
+            className="w-full max-w-[390px] px-6"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 32px)" }}
+          >
+            {(status === "loading" || searchHistory.length > 0) && (
+              <div className="mb-4 hide-scrollbar overflow-x-auto overflow-y-visible">
+                <div className="flex gap-2">
+                  {searchHistory.map((entry) => (
+                    <button
+                      key={entry.businessId}
+                      type="button"
+                      onClick={() => loadFromHistory(entry)}
+                      className="shrink-0 rounded-full border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] px-[14px] py-0 text-[13px] font-normal text-[#1A1A1A]"
+                      style={{ height: 32 }}
+                    >
+                      {entry.name}
+                    </button>
+                  ))}
+                  {status === "loading" && (
+                    <div className="h-8 w-[120px] shrink-0 rounded-full border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] shimmer-pulse" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            <PromptInputBox
+              isLoading={status === "loading"}
+              placeholder={
+                status === "loading"
+                  ? "Searching..."
+                  : hasResultCard
+                    ? "Search other restaurant"
+                    : "What restaurant are you at?"
+              }
+              className="border-2 border-white bg-[rgba(255,255,255,0.8)] text-[#1A1A1A] backdrop-blur-[8px] shadow-none"
+              onSend={(message) => {
+                const trimmed = message.trim();
+                if (!trimmed) return;
+                setQuery(trimmed);
+                void runSearch({ queryOverride: trimmed, forceRestaurant: true });
+              }}
+            />
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="fixed inset-x-0 bottom-0 flex justify-center z-20">
+          <div
+            className="w-full max-w-[390px] px-6"
+            style={{
+              // Lock the bottom search box position: depend only on safe-area inset.
+              // Raise it for breathing room (requested ~32px + safe area).
+              paddingBottom: "calc(env(safe-area-inset-bottom) + 56px)",
+            }}
+          >
+            {(status === "loading" || searchHistory.length > 0) && (
+              <div className="mb-2 hide-scrollbar overflow-x-auto overflow-y-visible">
+                <div className="flex gap-2">
+                  {searchHistory.map((entry) => (
+                    <button
+                      key={entry.businessId}
+                      type="button"
+                      onClick={() => loadFromHistory(entry)}
+                      className="shrink-0 rounded-full border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] px-[14px] py-0 text-[13px] font-normal text-[#1A1A1A]"
+                      style={{ height: 32 }}
+                    >
+                      {entry.name}
+                    </button>
+                  ))}
+                  {status === "loading" && (
+                    <div className="h-8 w-[120px] shrink-0 rounded-full border border-[rgba(0,0,0,0.1)] bg-[#FFFFFF] shimmer-pulse" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            <PromptInputBox
+              isLoading={status === "loading"}
+              placeholder={
+                status === "loading"
+                  ? "Searching..."
+                  : hasResultCard
+                    ? "Search other restaurant"
+                    : "What restaurant are you at?"
+              }
+              className="border-2 border-white bg-[rgba(255,255,255,0.8)] text-[#1A1A1A] backdrop-blur-[8px] shadow-none"
+              onSend={(message) => {
+                const trimmed = message.trim();
+                if (!trimmed) return;
+                setQuery(trimmed);
+                void runSearch({ queryOverride: trimmed, forceRestaurant: true });
+              }}
+            />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

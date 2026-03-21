@@ -41,9 +41,9 @@
 }
 
 body {
-  min-height: 100vh;
+  height: 100%;
   margin: 0;
-  background-color: var(--color-bg);
+  background-color: transparent;
   color: var(--color-text);
   /* Default UI font: DM Sans */
   font-family: var(--font-ui), system-ui, -apple-system, BlinkMacSystemFont,
@@ -51,115 +51,20 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Full-viewport gradient blob layer sits behind the app shell. */
-.gradient-layer {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
+html,
+body {
+  height: 100%;
   overflow: hidden;
+  overflow-x: hidden;
 }
 
-.gradient-blob {
-  position: absolute;
-  width: 340px;
-  height: 340px;
-  border-radius: 9999px;
-  filter: blur(72px);
-  opacity: 0.5;
-  transform: translate3d(0, 0, 0);
-}
-
-/* Base blue blobs */
-.gradient-blob--blue-1 {
-  background: var(--blue-4);
-  top: 8%;
-  left: 5%;
-}
-
-.gradient-blob--blue-2 {
-  background: var(--blue-3);
-  top: 35%;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.gradient-blob--blue-3 {
-  background: var(--blue-2);
-  bottom: -10%;
-  right: -5%;
-}
-
-/* White peak — always visible, like light shining through at the top center. */
-.gradient-blob--white-peak {
-  position: absolute;
-  width: 400px;
-  height: 400px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.6);
-  top: -18%;
-  left: 50%;
-  transform: translateX(-50%);
-  filter: blur(80px);
-  opacity: 1;
-}
-
-/* Loading: subtle drift and opacity breathing on blue blobs only. */
-@keyframes blobDriftSlow {
-  0% {
-    transform: translate3d(0, 0, 0);
-    opacity: 0.2;
-  }
-  50% {
-    transform: translate3d(20%, -15%, 0);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate3d(-15%, 10%, 0);
-    opacity: 0.3;
-  }
-}
-
-@keyframes blobDriftMedium {
-  0% {
-    transform: translate3d(0, 0, 0);
-    opacity: 0.2;
-  }
-  50% {
-    transform: translate3d(-20%, 15%, 0);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate3d(15%, -12%, 0);
-    opacity: 0.25;
-  }
-}
-
-@keyframes blobDriftFast {
-  0% {
-    transform: translate3d(0, 0, 0);
-    opacity: 0.25;
-  }
-  50% {
-    transform: translate3d(25%, 12%, 0);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate3d(-20%, -10%, 0);
-    opacity: 0.3;
-  }
-}
-
-.gradient-layer--loading .gradient-blob--blue-1 {
-  animation: blobDriftSlow 4s ease-in-out infinite alternate;
-}
-
-.gradient-layer--loading .gradient-blob--blue-2 {
-  animation: blobDriftMedium 3s ease-in-out infinite alternate;
-}
-
-.gradient-layer--loading .gradient-blob--blue-3 {
-  animation: blobDriftFast 2s ease-in-out infinite alternate;
+html {
+  background: linear-gradient(
+    to bottom,
+    #483e65 0%,
+    #483e65 58%,
+    #ffe483 100%
+  );
 }
 
 /* Previous search pill entrance: dot → springy pill, then label fade-in */
@@ -224,6 +129,22 @@ body::before {
   z-index: -1;
 }
 
+@keyframes gradientPulse {
+  0% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.85;
+  }
+}
+
+body.loading-pulse .app-gradient {
+  animation: gradientPulse 4s ease-in-out infinite;
+}
+
 /* Receipt-style animations */
 @keyframes receiptPrint {
   0% {
@@ -261,11 +182,28 @@ body::before {
   display: none;
 }
 
+@keyframes shimmerPulse {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.shimmer-pulse {
+  animation: shimmerPulse 3s ease-in-out infinite;
+}
+
 /* Receipt card container (torn edges are inline SVG in component). No rounding. */
 .receipt-card {
   position: relative;
   border-radius: 0;
   background-color: var(--receipt-bg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  /* Very subtle lift so torn edges do not clash with a strong shadow shape. */
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.10));
   overflow: visible;
 }

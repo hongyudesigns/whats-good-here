@@ -264,16 +264,91 @@
 
 ### Breathing gradient animation (complete rethink)
 
-- [x] **Add white peak** — Add a fifth layer: white/very light blue (rgba(255,255,255,0.6)) centered at top center, creating a bright white peak like light shining through. Always present, not just during loading.
-- [x] **Blurred blob layers instead of background-image** — Replace CSS background-image gradients with multiple separate absolutely positioned div elements. Each div is a colored circle with heavy blur (filter: blur 60–80px) that can drift smoothly. Use this for both the static look and the loading animation.
-- [x] **Smooth loading animation** — During loading, animate multiple overlapping gradient blobs at different speeds (e.g. 4s, 6s, 8s) so they create organic interference (Aurora Borealis feel). Use smooth continuous movement (transform + opacity), not stepped keyframes. Position drift subtle (10–15%); opacity range more dramatic (0.3 to 0.8). Light waxing and waning, not dark blobs jumping.
+- [x] **Switch to 5 fully-moving blobs (including white)** — Replace the current 3 blue + (fixed or “peak”) white approach with 5 blobs total. All 5 blobs move during loading (none fixed). Initial colors (from the palette cycle): `#0569FF`, `#2B80FF`, `#5B9DFF`, `#8DBAFF`, `#FFFFFF`. All blobs same size (~340px) and heavy blur (~72px).
+- [x] **DVD/screensaver style motion via requestAnimationFrame** — During loading only, move each blob with independent bouncing on the viewport (different speeds and angles). On each bounce, the blob shifts to the next color in the cycle (so every blob continues through the palette).
+- [x] **Smooth return on loading end** — When loading finishes, stop the movement loop and smoothly return all blobs to their static resting positions (not snapping). Keep movement slow (cross-screen about 8–12s) and keep drift/angles stable enough to feel organic.
 
 ### Four fixes (background + pills + Claude)
 
-- [ ] **Background blob animation not working** — Blobs aren’t moving during loading. Debug why CSS animations aren’t applying: verify `gradient-layer--loading` is added in the DOM and that keyframe animations are running. Then make movement much more visible: drift 20–25%, opacity 0.2–0.9, and speed up to 2s/3s/4s durations (Aurora Borealis level).
-- [ ] **White peak not visible** — Debug why the white blob isn’t showing. Make it very obvious: opacity 1.0 and size 400px (then we can tone down).
-- [ ] **Previous search pill entrance animation** — When a new receipt loads, the new pill should animate in: tiny dot → expands to full pill width with bouncy spring, then restaurant name text fades in (not instant).
-- [ ] **Deviled Eggs missing from A-List again** — Clear Claude cache and re-run. Check if per-session cache is locking in bad results again.
+- [x] **Background blob animation still not triggering during loading** — Background motion is now driven via `requestAnimationFrame` on `status === "loading"` (so it no longer depends on CSS keyframes). Debug logging remains and can confirm the loading state if needed.
+- [x] **Previous search pills disappearing during loading** — Pills row is now rendered whenever `searchHistory.length > 0`, including during loading.
+- [x] **Receipt shadow using drop-shadow filter** — Receipt shadow swapped to `filter: drop-shadow(0 8px 24px rgba(0,0,0,0.12))`.
+- [x] **Deviled Eggs missing from A-List again** — Claude per-session dish-name cache is cleared in the `/api/search` `GET` handler before each request.
+
+### Two changes (remove blobs + restore cache)
+
+- [x] **Remove all blob background animation, use static background + spinner** — Remove all background blob code entirely: no blob hook/logic, no `gradient-layer` / `gradient-blob` divs in `page.tsx`, no blob CSS in `globals.css`, no `gradient-layer--loading` logic. Keep a simple static blue body background and show a clean centered white spinning circle during loading.
+- [x] **Restore Claude session cache behavior** — Remove `claudeDishNamesCache.clear()` from the `/api/search` `GET` handler in `app/api/search/route.ts` so cache persists during a session and repeat searches are consistent.
+
+### Major redesign + backend fix (approval-gated)
+
+> **Gate:** Do not implement any code changes until plan is approved.
+
+- [x] **Step 1 — Fix Claude cache**  
+  In `app/api/search/route.ts`, remove the `claudeDishNamesCache.clear()` line from the `GET` handler. Cache should persist during a server session for consistent results.
+
+- [x] **Step 2 — New background**  
+  Replace current background entirely. Main viewport wrapper should use:  
+  `bg-[radial-gradient(125%_125%_at_50%_101%,rgba(245,87,2,1)_10.5%,rgba(245,120,2,1)_16%,rgba(245,140,2,1)_17.5%,rgba(245,170,100,1)_25%,rgba(238,174,202,1)_40%,rgba(202,179,214,1)_65%,rgba(148,201,233,1)_100%)]`  
+  Remove all blob divs/layers and all blob/gradient-layer animation CSS from `globals.css` and `page.tsx`.
+
+- [x] **Step 3 — Install dependencies**  
+  Run: `npm install @radix-ui/react-tooltip @radix-ui/react-dialog framer-motion`
+
+- [x] **Step 4 — Add PromptInputBox component**  
+  Create `app/components/ui/ai-prompt-box.tsx` and paste the exact component code provided by user.  
+  **Done:** Component file added and wired for next steps.
+
+- [x] **Step 5 — Replace search bar with PromptInputBox**  
+  Remove current frosted pill search bar from `page.tsx`; import `PromptInputBox`; fix to bottom with 20px horizontal margins and safe-area bottom; apply frosted glass override styles; placeholders: `"What restaurant are you at?"` and `"Search other restaurant"` when receipt is showing; wire `onSend` to existing `runSearch`; preserve mic→send behavior; remove `useKeyboardOffset` hook.
+
+- [x] **Step 6 — Replace bottom-left icons with previous search pills**  
+  Inside `PromptInputBox`, replace icon button row + dividers with previous-search pills row using session cache behavior and styling: horizontally scrollable, hidden scrollbar, frosted pills (`rgba(255,255,255,0.2)` bg / `rgba(255,255,255,0.4)` border), white text DM Sans 13px, 32px height, 14px horizontal padding, 8px gap; pill tap loads cached result; no history = show nothing; preserve framer-motion hover animations.
+
+- [x] **Step 7 — Update headline color/contrast**  
+  Keep `"What's good here?"` white and add subtle text-shadow if needed for readability on warm gradient.
+
+### Twelve fixes (post-redesign polish)
+
+- [x] **Background full screen** — Gradient currently shows only in 390px column. Make gradient cover full viewport; 390px shell should be transparent. Only outermost full-viewport wrapper gets gradient.
+- [x] **Remove paperclip/upload button** — Remove `Paperclip` button and hidden file input from `PromptInputBox` entirely.
+- [x] **Search box color** — Set search box to dark style: background `#1F2023`, border `#444444`, text white, placeholder `rgba(255,255,255,0.5)`.
+- [x] **Search box margin** — Use 24px horizontal margin from screen edges on fixed bottom wrapper.
+- [x] **Pill overflow cut off** — Remove `overflow: hidden` behavior from pills container inside `PromptInputBox` so pills can expand freely on hover.
+- [x] **Remove top pills row** — Remove pills row above the receipt card at top of screen permanently.
+- [x] **Receipt card margin** — Use 24px horizontal margin on both sides (not edge-to-edge).
+- [x] **Receipt shadow subtle** — Use subtle shadow: `filter: drop-shadow(0 4px 12px rgba(0,0,0,0.10))`.
+- [x] **Pill skeleton loading state** — On search start, show pill skeleton (32px height, 120px width, shimmer pulse) in pills area above search box; transition to real pill on results.
+- [x] **Headline and text 24px margin** — Keep consistent 24px horizontal margin across headline/body text.
+- [x] **Background gradient proportions** — Ensure full-screen radial gradient fills naturally: warm orange bottom center blending to peach/pink/lavender/light blue top; avoid squishing/distortion.
+- [x] **Move pills above search box** — Remove pills from inside `PromptInputBox`; render separate fixed pills row directly above search box with 8px gap, horizontally scrollable, frosted glass style, white text.
+
+### Seven fixes (cache + UI + history)
+
+- [ ] **Zahav returning no results** — Search `app/api/search/route.ts` for any remaining `claudeDishNamesCache.clear()` calls and remove all of them so cache persists.
+- [ ] **Pills color (dark theme)** — Pills above search box should be dark: background `#2A2A2E`, border `#444444`, text white. Remove frosted white styling.
+- [ ] **Headline/body text color** — Change `"What's good here?"` to `#1A1A1A` and remove text-shadow. Change personal crusade body text to `#1A1A1A`.
+- [ ] **Phone outline preview (temporary)** — Add temporary centered 390px phone-style outline wrapping app content (rounded 40px, border `2px solid rgba(0,0,0,0.3)`), with comment `// REMOVE BEFORE PRODUCTION`.
+- [ ] **History persistence** — Ensure search history accumulates up to 10 entries and previous pills remain visible when searching new restaurants.
+- [ ] **Loading spinner color** — Set loading spinner to white for contrast.
+- [ ] **Background pulse during loading** — Add simple CSS opacity pulse on gradient background during loading only (0.85 ↔ 1.0, 2s ease-in-out). Stop when loading ends. If complex, skip.
+
+### Three fixes (WordLoader + torn edge + spinner cleanup)
+
+- [ ] **Replace loading spinner with WordLoader animation** — Install `gsap` and `@gsap/react`; create `app/lib/utils.ts` with simple `cn` utility; create `app/components/ui/word-loader.tsx` WordLoader component; replace current loading spinner with WordLoader using words: `"skimming reviews"`, `"finding dishes"`, `"counting mentions"`, `"reading opinions"`, `"almost there"`. Style loader text white for gradient contrast.
+- [ ] **Bottom jagged edge missing on longer receipts** — Fix bottom torn SVG edge not showing on tall receipts (likely clipping/overflow/positioning issue). Ensure receipt wrapper and torn edge positioning keep bottom edge visible regardless of card height.
+- [ ] **Current spinner not animating** — If any spinner remains, fix it or fully remove it and confirm loading state is exclusively WordLoader.
+
+### Five fixes (loader/pills sync + cache debug)
+
+- [x] **Loader text color** — Change `WordLoader` text color from white to `#1A1A1A` to match headline color.
+- [x] **Pills lighter gray** — Change pills above search box from background `#2A2A2E` / border `#444444` to background `#3A3A3E` / border `#555555`.
+- [x] **Loader text position** — Center `WordLoader` vertically between headline and search box (true center of available content area during loading).
+- [x] **Sync loading animations (2s)** — Make pill skeleton shimmer, background gradient pulse, and WordLoader cycle all use a 2s loop so they feel synchronized.
+- [x] **Zahav cache debugging logs** — In `app/api/search/route.ts` add logs:  
+  `"[api/search] Claude cache size: ${claudeDishNamesCache.size}"` at start of GET, and  
+  `"[api/search] Claude cache stored for: ${businessId}"` after cache set.  
+  Then run Zahav search and inspect terminal output.
 
 ---
 
@@ -401,3 +476,159 @@
 - **Dish-search API (unused in v3 UI):** Confirm that we should leave the dish-search API path intact but unused from the new interface (no pills or hidden toggles that hit it).
 
 Once you confirm this redesign checklist, I’ll implement items in small, focused steps and keep `steps.md` and this file in sync as we go.
+
+---
+### Six fixes (slow loaders + styling)
+
+- [x] **1. Slow loading animations** — WordLoader full loop to 5 seconds; shimmer pulse to 3 seconds; background gradient pulse to 4 seconds. Keep everything gentle/slow.
+- [x] **2. Word loader position** — Raise it so it sits at the midpoint between the headline and the pills row position (pills row approx 80px above the search box bottom reference).
+- [x] **3. Error state styling** — Set `"We found a few places that match"` text color to `#1A1A1A`. Style restaurant option cards to match pill styling: bg `#3A3A3E`, border `#555555`, white text, same border radius as pills.
+- [x] **4. Pills less pronounced** — Pills bg `#2A2A2E`, border `#3A3A3E`, text `rgba(255,255,255,0.7)`.
+- [x] **5. Remove red border during loading** — In `ai-prompt-box.tsx`, remove any `isLoading && "border-red-500/70"` styling and ensure no border change happens during loading at all.
+- [x] **6. Search placeholder during loading** — When `status === "loading"`, pass placeholder `"Searching..."` into `PromptInputBox`.
+
+---
+### Revert to frosted glass (white theme)
+
+- [x] **1. Search box frosted glass** — background `rgba(255,255,255,0.2)`, border `rgba(255,255,255,0.3)`, keep `backdrop-blur-[12px]`, placeholder white at `70%` opacity, input text white.
+- [x] **2. Microphone/send button contrast** — ensure button reads well on frosted box (prefer white button bg with dark icon).
+- [x] **3. Pills frosted glass** — background `rgba(255,255,255,0.2)`, border `rgba(255,255,255,0.3)`, text white.
+- [x] **4. All text back to white** — headline “What&apos;s good here?” + personal crusade body text should be `#FFFFFF`.
+- [x] **5. Error state cards frosted glass** — multiple-match buttons (and related cards) should use the same frosted glass styling as pills; “We found a few places” heading also white.
+- [x] **6. Word loader text** — change loader text back to white.
+
+---
+### Four fixes (solid white UI + locked layout)
+
+- [x] **1. Remove frosted glass** — Search box: solid `#FFFFFF` bg, dark text `#1A1A1A`, placeholder `#6B6B6B`, border `rgba(0,0,0,0.1)`. Pills + error state cards: same solid white background + dark text + light border.
+- [x] **2. No scroll at all** — Page must never scroll vertically or horizontally. Add `overflow: hidden` to `html` and `body` in `globals.css`, and ensure layout fits within `100vh` without overflow.
+- [x] **3. Lock search box** — Search box must never move: keep `position: fixed`, bottom with safe-area padding, left/right anchored.
+- [x] **4. Word loader** — Make text `1.5x` bigger than current and make animation `2x` slower (e.g. 5s loop becomes 10s).
+
+---
+### Five fixes (search box + send button)
+
+- [x] **1. Search box position** — Raise it: bottom padding approx `32px + safe-area inset`.
+- [x] **2. Search box styling** — background `rgba(255,255,255,0.8)`, `border: 2px solid white`, `backdrop-blur-[8px]`, text `#1A1A1A`, placeholder `#6B6B6B`.
+- [x] **3. Replace microphone with send button** — Remove voice recording entirely (remove `VoiceRecorder`, `isRecording`, `handleStartRecording`, `handleStopRecording`). Replace mic with a send arrow button (ArrowRight) with `#1A1A1A` icon on white circle.
+- [x] **4. Remove Square/StopCircle icons** — Since recording is removed, delete unused icon imports/usages (`Square`, `StopCircle`).
+- [x] **5. Send button only shows when typing** — When `input` is empty, right side of search box is empty. When user types, send button fades in smoothly.
+
+---
+### Four fixes (scrollable middle + compact search)
+
+- [x] **1. Scrollable middle content area** — Content between headline and pills/search should be independently scrollable. Headline and the “We found a few places” text stays fixed at top. Pills row and search box stay fixed at bottom (higher z-index). Only the list of restaurant cards scrolls. Implement with `overflow-y: auto` on a middle content div with a fixed height filling the space between top content and bottom fixed area; items should scroll behind the bottom fixed area.
+- [x] **2. Search box compact height** — Reduce search box to hug its content. Single-line input + send button side-by-side in the same row. Remove extra bottom padding reserved for the icon row. Box ~52px tall when empty, expand naturally if text wraps.
+- [x] **3. Send button inline** — Send button must be on the same row as the text input (right-aligned inside that row), not a separate row below.
+- [x] **4. Bottom fade mask** — Add subtle gradient fade at the bottom of the scrollable area just above the pills row so list items fade out as they approach the fixed bottom area.
+
+---
+### Two fixes (phantom space + list height)
+
+- [x] **1. Remove phantom space below search box** — In neutral/idle state, eliminate extra white space appearing below the fixed bottom search box. Remove any padding/margin/min-height affecting the fixed bottom wrapper or PromptInputBox in idle so only safe-area padding remains.
+- [x] **2. Fix scrollable list height** — In list states, set the middle scrollable content height to hard-cut at ~360px (4.5 cards * ~80px). Use fixed height + `overflow: hidden`/`overflow-y: auto` so it cuts off cleanly without bleeding into pills/search area.
+
+---
+### Four fixes (section labels + spacing + dock + sort)
+
+- [x] **1. Add section labels in `app/page.tsx`** — Add comments: `{/* HEADER SECTION */}`, `{/* CONTENT SECTION */}`, `{/* DOCK */}` above their respective wrappers.
+- [x] **2. Dock position** — Increase dock bottom padding to `56px + safe-area inset`.
+- [x] **3. Global headline spacing** — Add `mb-6` to the header in HEADER SECTION.
+- [x] **4. Send button alignment** — Align send button to vertical center of initial single-line input and keep it 8px from right edge.
+- [x] **5. Multiple matches sort order** — In API route, sort multiple business matches by `review_count` descending before returning.
+
+---
+### Two small fixes (idle text + loading input)
+
+- [x] **1. Idle body text alignment** — Center align the personal crusade body text in idle state (`text-center`).
+- [x] **2. Loading typing behavior** — During loading, keep input enabled for type-ahead, but disable send button (50% opacity, non-clickable). Re-enable send when loading ends and text exists.
+
+---
+### Multiple-matches header grouping (subtitle spacing)
+
+- [x] **1. Subtitle belongs to section 1** — In multiple-matches state, treat `"We found a few places..."` as part of the header block (section 1), with `mb-4` (16px) between headline and subtitle and `mt-8` (32px) between subtitle and the scrollable list.
+
+---
+### Zahav "no dishes stood out" investigation
+
+- [x] **1. Diagnose only (no UI changes)** — Investigate why searching `"Zahav"` returns empty A-List/Blacklist despite 3000+ reviews: verify business lookup in CSV, verify 30-review sample assembly + Claude request payload, inspect Claude dish names returned, and validate mention counting against full reviews (including case/whitespace normalization). Report findings before any code changes.
+
+---
+### Zahav "no dishes" fix (truncation + parse fallback)
+
+- [x] **1. Increase Claude output budget + fallback parser** — In `getClaudeDishNames()`, increase `max_tokens` from `512` to `1024`. If `JSON.parse()` fails on Claude text, attempt fallback extraction by parsing a JSON array substring from the first `[` to the last complete `]`; if fallback still fails, log and return `null`.
+
+---
+### Results spacing below receipt
+
+- [x] **1. Add receipt-to-dock gap in results** — In results state, enforce a 32px gap (`mb-8`) between the bottom of the receipt card and the pills/dock area.
+
+---
+### Results clearance + loading headline alignment
+
+- [x] **1. Fix results/dock overlap + loading headline position** — Ensure results section has reliable 32px clearance below the receipt before the fixed dock starts, prevent pills from overlapping receipt by increasing results scroll-area bottom padding (`pb-32` or equivalent), and keep headline top-aligned (`pt-8`) in loading and all non-receipt states (idle/multiple/error), with headline hidden only when receipt is shown.
+
+---
+### Results-state dock flow (not fixed)
+
+- [x] **1. Make results dock in-flow** — In results/receipt state only, render pills + search in normal document flow after the receipt (not fixed): receipt → `mb-8` → pills row → `mb-4` → search box → bottom `pb-8`. Keep dock fixed-bottom behavior for idle/loading/multiple/error states.
+
+---
+### Results dock motion + Safari bottom clearance
+
+- [x] **1. Remove dock slide in results** — In results state, remove any dock position/translate animation behavior so pills + search appear in place with no movement when receipt results render.
+- [x] **2. Add adaptive Safari bottom padding in results scroll** — On the results scroll container, use `padding-bottom: calc(env(safe-area-inset-bottom) + 130px)` so the search box clears mobile Safari browser UI; should degrade gracefully when inset is `0`.
+
+---
+### Multiple list centering + results padding tweak
+
+- [x] **1. Multiple matches equidistant spacing** — In multiple-matches state, make the scrollable list container sit equidistant between section 1 and section 3 by adding 32px above and below (`my-8` or equivalent).
+- [x] **2. Results bottom padding reduction** — Change results scroll-container bottom padding from `calc(env(safe-area-inset-bottom) + 130px)` to `calc(env(safe-area-inset-bottom) + 65px)`.
+
+---
+### Multiple-list fade mask rewrite
+
+- [x] **1. Replace overlay fades with container mask-image** — Remove current top/bottom overlay fade implementation and apply a single `mask-image: linear-gradient(...)` on the multiple-matches scroll container itself. Drive mask state from scroll position: top (`bottom-only` fade), bottom (`top-only` fade), middle (`both` fades), with soft gradients.
+
+---
+### Multiple-list fade intensity tuning
+
+- [x] **1. Soften edge fade + shrink fade zone** — Reduce multiple-matches mask fade zones to ~40px on top/bottom edges and make the gradient subtler so more cards remain clearly visible.
+
+---
+### Four fixes (outline + status bar + results scroll + spacing)
+
+- [x] **1. Remove phone outline border** — Delete the temporary rounded phone frame wrapper (`rounded-[40px] border-2 ...`, marked REMOVE BEFORE PRODUCTION) from `app/layout.tsx`.
+- [x] **2. Fix status bar color on mobile** — Apply gradient background color to `html` and set `theme-color` metadata to `#483E65` so iPhone top/bottom safe areas blend with the gradient.
+- [x] **3. Enable vertical scroll in results state** — Allow full-page vertical scroll when receipt is showing so user can reach search box below receipt; keep overflow hidden for non-results states.
+- [x] **4. Receipt spacing** — Ensure 32px gap above receipt and 32px gap between receipt bottom and dock/search area.
+
+---
+### Four fixes (status bar + results scroll + PWA + global cache)
+
+- [x] **1. Fix mobile status bar blending** — Set `theme-color` meta to `#483E65`. Set `html` and `body` background color to `#483E65` in `globals.css`. Ensure gradient wrapper starts at viewport top with no margin/padding so top gradient blends at status bar edge.
+- [x] **2. Fix mobile results scroll flow** — Ensure results state can scroll to dock: `overflow-y-auto` on main when `hasResultCard`, content exceeds viewport height, dock in document flow (not fixed) in results state. Structure should be receipt → 32px gap → pills row → search box, all scrollable.
+- [x] **3. Set up PWA meta tags + manifest** — Add head/meta config (`apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style=black-translucent`, viewport with `viewport-fit=cover`) and link manifest. Add `public/manifest.json` with requested fields/colors.
+- [x] **4. Claude cache persistence via globalThis** — Use `globalThis` storage for Claude cache so it persists across dev HMR restarts.
+
+---
+### Two fixes (search text color + results bottom padding)
+
+- [ ] **1. Search box text colors** — In `ai-prompt-box.tsx`, set placeholder color to `rgba(255,255,255,0.6)` and input text color to `#FFFFFF` for all placeholder states.
+- [x] **1. Search box text colors** — In `ai-prompt-box.tsx`, set placeholder color to `rgba(255,255,255,0.6)` and input text color to `#FFFFFF` for all placeholder states.
+- [x] **2. Bottom scroll padding in results state** — Add extra bottom padding (~80px) to scrollable main in results state so dock/search remains fully visible with ~56px space below at scroll end.
+
+---
+### Three fixes (dock/pills alignment + safe area colors)
+
+- [x] **1. Search box and pills width alignment** — Make dock search box + pills row match receipt card horizontal edges exactly (same 24px shell padding alignment).
+- [x] **2. Pills border radius** — Change previous-search pills to `rounded-full` for fully pill-shaped corners.
+- [x] **3. Bottom safe area color blend** — Use `html` linear-gradient so top blends with `#483E65` and bottom safe area blends with `#FFE483`.
+
+---
+### Several fixes (dock margins + bottom bar + multiple layout + 32px gaps)
+
+- [x] **1. Dock margins in all states** — Ensure search box + pills always have 24px horizontal margins (`px-6`) in idle/loading/results (no edge-to-edge in non-results).
+- [x] **2. Force yellow bottom safe area** — Add fixed bottom overlay with height `env(safe-area-inset-bottom)` and background `#FFE483` so bottom safe area is yellow.
+- [x] **3. Fix multiple-matches layout** — Keep headline at top; 32px below headline for subtitle; scrollable list in middle with fixed 4.5-card height (~360px); 32px gap between list and dock; dock fixed bottom with 24px side margins; in this state top area should use start alignment.
+- [x] **4. Global 32px section gaps** — Enforce 32px between major sections (headline→content and content→dock) across states via shared layout rules, not ad-hoc per-state spacing.

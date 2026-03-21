@@ -288,7 +288,7 @@ async function getClaudeDishNames(reviews: Review[]): Promise<string[] | null> {
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
+      max_tokens: 1024,
       temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
@@ -306,10 +306,42 @@ async function getClaudeDishNames(reviews: Review[]): Promise<string[] | null> {
       jsonStr = jsonStr.replace(/^```(?:json)?\n/, "").replace(/\n```$/, "").trim();
     }
 
-    const parsed = JSON.parse(jsonStr) as unknown;
-    const names = Array.isArray(parsed)
-      ? (parsed as unknown[]).filter((x): x is string => typeof x === "string")
-      : [];
+    let names: string[] = [];
+    try {
+      const parsed = JSON.parse(jsonStr) as unknown;
+      names = Array.isArray(parsed)
+        ? (parsed as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+    } catch (parseErr) {
+      // Fallback: salvage array content if Claude output was truncated around JSON.
+      const firstBracket = jsonStr.indexOf("[");
+      const lastBracket = jsonStr.lastIndexOf("]");
+      if (firstBracket !== -1 && lastBracket > firstBracket) {
+        const candidate = jsonStr.slice(firstBracket, lastBracket + 1);
+        try {
+          const fallbackParsed = JSON.parse(candidate) as unknown;
+          names = Array.isArray(fallbackParsed)
+            ? (fallbackParsed as unknown[]).filter((x): x is string => typeof x === "string")
+            : [];
+          console.warn(
+            "[api/search] getClaudeDishNames: recovered via fallback JSON extraction.",
+          );
+        } catch (fallbackErr) {
+          console.warn(
+            "[api/search] getClaudeDishNames: parse failed; fallback extraction also failed.",
+            { parseErr, fallbackErr },
+          );
+          return null;
+        }
+      } else {
+        console.warn(
+          "[api/search] getClaudeDishNames: parse failed and no complete JSON array found.",
+          { parseErr },
+        );
+        return null;
+      }
+    }
+
     console.log("[api/search] getClaudeDishNames: got", names.length, "dish names:", names);
     return names.length > 0 ? names : null;
   } catch (err) {
@@ -393,7 +425,13 @@ function dedupeDishNames(names: string[]): string[] {
   });
 }
 
-const claudeDishNamesCache = new Map<string, string[] | null>();
+const claudeDishNamesCache = ((globalThis as typeof globalThis & {
+  __claudeCache?: Map<string, string[] | null>;
+}).__claudeCache ?? new Map<string, string[] | null>());
+
+(globalThis as typeof globalThis & {
+  __claudeCache?: Map<string, string[] | null>;
+}).__claudeCache = claudeDishNamesCache;
 
 async function getClaudeDishesForBusiness(
   businessId: string,
@@ -415,6 +453,7 @@ async function getClaudeDishesForBusiness(
   const names = await getClaudeDishNames(reviews);
   if (!names || names.length === 0) return { order_this: [], skip_this: [] };
   claudeDishNamesCache.set(businessId, names);
+  console.log(`[api/search] Claude cache stored for: ${businessId}`);
   const unique = dedupeDishNames(names);
   console.log("[api/search] dedupeDishNames: input =", names, "unique =", unique);
   return countDishesInAllReviews(reviews, unique);
@@ -422,10 +461,7 @@ async function getClaudeDishesForBusiness(
 
 export async function GET(req: NextRequest) {
   try {
-    // For debugging inconsistent Claude dish names (e.g. Deviled Eggs / Fish and Chips),
-    // always clear the per-session Claude cache so each request re-asks Claude.
-    claudeDishNamesCache.clear();
-
+    console.log(`[api/search] Claude cache size: ${claudeDishNamesCache.size}`);
     const rate = checkRateLimit(req);
     if (!rate.ok) {
       const retryAfterSec =
@@ -526,10 +562,13 @@ export async function GET(req: NextRequest) {
       }
 
       if (matches.length > 1) {
+        const sortedMatches = [...matches].sort(
+          (a, b) => b.review_count - a.review_count,
+        );
         return NextResponse.json(
           {
             status: "multiple",
-            matches: matches.slice(0, 10).map((b) => ({
+            matches: sortedMatches.slice(0, 10).map((b) => ({
               business_id: b.business_id,
               name: b.name,
               address: b.address,
