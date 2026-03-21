@@ -596,6 +596,11 @@ Once you confirm this redesign checklist, I’ll implement items in small, focus
 - [x] **1. Soften edge fade + shrink fade zone** — Reduce multiple-matches mask fade zones to ~40px on top/bottom edges and make the gradient subtler so more cards remain clearly visible.
 
 ---
+### Dock width parity with receipt
+
+- [x] **1. Match dock width to receipt in all states** — Ensure pills row and search box use the same effective 24px side margins (`mx-6` parity) as the receipt card so dock width matches receipt width in results and non-results states.
+
+---
 ### Four fixes (outline + status bar + results scroll + spacing)
 
 - [x] **1. Remove phone outline border** — Delete the temporary rounded phone frame wrapper (`rounded-[40px] border-2 ...`, marked REMOVE BEFORE PRODUCTION) from `app/layout.tsx`.

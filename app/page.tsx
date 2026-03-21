@@ -497,7 +497,7 @@ export default function HomePage() {
     <main
       className={
         hasResultCard
-          ? "relative h-[100vh] overflow-y-auto overflow-x-hidden flex flex-col"
+          ? "relative h-[100vh] overflow-y-auto overflow-x-hidden flex flex-col -mx-6 px-6"
           : "relative h-[100vh] overflow-hidden flex flex-col"
       }
       style={
@@ -705,7 +705,7 @@ export default function HomePage() {
       {hasResultCard ? (
         <div className="relative z-20 flex justify-center">
           <div
-            className="w-full max-w-[390px] px-6"
+            className="w-full"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 32px)" }}
           >
             {(status === "loading" || searchHistory.length > 0) && (
@@ -751,7 +751,7 @@ export default function HomePage() {
       ) : (
         <div className="fixed inset-x-0 bottom-0 flex justify-center z-20">
           <div
-            className="w-full max-w-[390px] px-6"
+            className="w-[calc(100vw-48px)] max-w-[342px]"
             style={{
               // Lock the bottom search box position: depend only on safe-area inset.
               // Raise it for breathing room (requested ~32px + safe area).
